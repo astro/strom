@@ -1,0 +1,11 @@
+[package]
+name = "strom"
+version = "0.1.0"
+authors = ["Astro <astro@spaceboyz.net>"]
+
+[dependencies]
+hyper = "0.7.2"
+
+[dependencies.gstreamer]
+version = "0.3.0"
+path = "../gstreamer1.0-rs"
