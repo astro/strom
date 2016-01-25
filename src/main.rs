@@ -8,9 +8,7 @@ use hyper::method::Method;
 use hyper::status::StatusCode;
 use hyper::uri::RequestUri;
 use hyper::net::Fresh;
-use std::io::{Read, Write};
-use std::thread;
-use std::sync::mpsc::channel;
+use std::io::Write;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
@@ -38,7 +36,7 @@ impl HttpHandler {
 }
 
 impl Handler for HttpHandler {
-    fn handle<'a, 'k>(&'a self, mut req: Request<'a, 'k>, mut res: Response<'a, Fresh>) {
+    fn handle<'a, 'k>(&'a self, req: Request<'a, 'k>, mut res: Response<'a, Fresh>) {
         println!("req: {:?} {:?}", req.method, req.uri);
         let path = match &req.uri {
             &RequestUri::AbsolutePath(ref path) => path.clone(),
@@ -53,7 +51,7 @@ impl Handler for HttpHandler {
             res.headers_mut().set(ContentType(
                 Mime(TopLevel::Text, SubLevel::Html, vec![])
             ));
-            let mut res = res.start().unwrap();
+            let res = res.start().unwrap();
 
             let stream = Arc::new(Mutex::new(streams::Stream::new()));
             {
@@ -85,7 +83,7 @@ impl Handler for HttpHandler {
             let mut res = res.start().unwrap();
 
             let consume = {
-                let mut streams = self.streams.lock().unwrap();
+                let streams = self.streams.lock().unwrap();
                 streams.get(&path_components[0])
                     .and_then(|stream| {
                         println!("Found a valid stream to this req!");
@@ -105,7 +103,7 @@ impl Handler for HttpHandler {
                                 data[i] = *c;
                             }
                         }).unwrap();
-                        res.write(&data);
+                        res.write(&data).unwrap();
                     }
                 }
                 None =>
@@ -125,12 +123,7 @@ fn main() {
     mainloop.spawn();
 
     let handler = HttpHandler::new();
-    thread::spawn(|| {
-        Server::http("0.0.0.0:8080").unwrap().handle(handler).unwrap()
-    }).join();
+    Server::http("0.0.0.0:8080").unwrap().handle(handler).unwrap();
 
-    println!("Run gst mainloop...");
-    mainloop.run();
-    println!("Ran gst mainloop.");
     mainloop.quit();
 }

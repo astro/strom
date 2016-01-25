@@ -1,13 +1,10 @@
-use gst;
-use gst::{BinT, ElementT};
-use std::thread;
-use std::sync::{Arc, Mutex};
-
 use pipe::Pipe;
 use source::Source;
 use broadcast::*;
 
+#[allow(dead_code)]
 pub struct Stream {
+    // Never retrieved, but referenced to stay alive:
     pipe: Pipe,
     src: Source,
     broadcasts: Vec<(&'static str, Broadcast)>
@@ -18,7 +15,7 @@ impl Stream {
     * s: "matroskademux ! matroskamux streamable=true"
     **/
     pub fn new() -> Self {
-        let mut pipe = Pipe::new(
+        let pipe = Pipe::new(
             r"
 appsrc name=input input. ! decodebin ! audio/x-raw ! tee name=t
 t. ! queue ! audioconvert ! lamemp3enc bitrate=6 ! appsink name=mp3
@@ -32,7 +29,7 @@ t. ! queue ! audioconvert ! opusenc bitrate=64000 ! oggmux ! appsink name=opus
             .into_iter()
             .map(|name| (name.to_owned(), Broadcast::new(pipe.appsink(&name).expect("by appsink"))) )
             .collect();
-        
+
         Stream {
             src: pipe.appsrc("input").expect("by appsrc"),
             pipe: pipe,

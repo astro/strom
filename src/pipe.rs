@@ -28,24 +28,24 @@ impl Pipe {
 	    let bus_receiver = bus.receiver();
             for message in bus_receiver.iter() {
                 match message.parse() {
-                    gst::Message::StateChangedParsed{ref msg, ref old, ref new, ref pending} =>
-			println!("element `{}` changed from {:?} to {:?}", message.src_name(), old, new),
+                    gst::Message::StateChangedParsed{msg: _, ref old, ref new, pending: _} =>
+			            println!("element `{}` changed from {:?} to {:?}", message.src_name(), old, new),
                     gst::Message::StateChanged(_) =>
-			println!("element `{}` state changed", message.src_name()),
-		    gst::Message::ErrorParsed{ref msg, ref error, ref debug} => {
-			println!("error msg from element `{}`: {}, quitting", message.src_name(), error.message());
-			break;
-		    },
-		    gst::Message::Eos(ref msg) => {
-			println!("eos received quiting");
-			break;
-		    },
+			            println!("element `{}` state changed", message.src_name()),
+		            gst::Message::ErrorParsed{msg: _, ref error, debug: _} => {
+                        println!("error msg from element `{}`: {}, quitting", message.src_name(), error.message());
+	                    break;
+                    },
+		            gst::Message::Eos(ref _msg) => {
+                        println!("eos received quiting");
+	                    break;
+                    },
                     _ =>
                         println!("Pipe message: {} from {} at {}", message.type_name(), message.src_name(), message.timestamp())
                 }
             }
         });
-        
+
         pipeline.play();
 
         Some(Pipe {

@@ -41,7 +41,7 @@ impl Source {
             for (i, c) in mapping.iter_mut::<u8>().enumerate() {
                 *c = data[i];
             }
-        });
+        }).unwrap();
         buffer.set_live(true);
         let res = self.src.push_buffer(buffer);
         assert!(res == 0);
