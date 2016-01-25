@@ -87,7 +87,7 @@ impl Handler for HttpHandler {
                 streams.get(&path_components[0])
                     .and_then(|stream| {
                         println!("Found a valid stream to this req!");
-                        let stream = stream.lock().unwrap();
+                        let mut stream = stream.lock().unwrap();
                         stream.get_broadcast_consumer(&path_components[1])
                     })
             };

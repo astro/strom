@@ -45,12 +45,10 @@ t. ! queue ! audioconvert ! opusenc bitrate=64000 ! oggmux ! appsink name=opus
         self.src.end();
     }
 
-    pub fn get_broadcast_consumer(&self, wanted_name: &str) -> Option<Consumer> {
-        for &(ref name, ref broadcast) in &self.broadcasts {
-            if name == &wanted_name {
-                return Some(broadcast.consumer())
-            }
-        }
-        None
+    pub fn get_broadcast_consumer(&mut self, wanted_name: &str) -> Option<Consumer> {
+        self.broadcasts
+            .iter_mut()
+            .find(|&&mut (ref name, _)| name == &wanted_name)
+            .and_then(|&mut (_, ref mut broadcast)| Some(broadcast.consumer()))
     }
 }

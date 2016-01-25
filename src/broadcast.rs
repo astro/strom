@@ -5,9 +5,10 @@ use gst;
 
 use sink::Sink;
 
-type Consumers = Arc<Mutex<Vec<Sender<Arc<Mutex<gst::Sample>>>>>>;
+type Consumers = Arc<Mutex<Vec<(usize, Sender<Arc<Mutex<gst::Sample>>>)>>>;
 
 pub struct Broadcast {
+    n: usize,
     consumers: Consumers
 }
 
@@ -15,6 +16,7 @@ impl Broadcast {
     pub fn new(sink: Sink) -> Self {
         let consumers = Arc::new(Mutex::new(vec![]));
         let self_ = Broadcast {
+            n: 0,
             consumers: consumers.clone()
         };
         thread::spawn(|| Self::run_distributer(consumers, sink) );
@@ -26,29 +28,37 @@ impl Broadcast {
             let sample = Arc::new(Mutex::new(sample));
             let consumers = consumers.lock().expect("consumers lock");
             for tx in consumers.iter() {
-                tx.send(sample.clone()).unwrap();
+                tx.1.send(sample.clone()).unwrap();
             }
         }
     }
 
-    pub fn consumer(&self) -> Consumer {
+    pub fn consumer(&mut self) -> Consumer {
+        self.n += 1;
         let (tx, rx) = channel();
-        
+
         let mut consumers = self.consumers.lock().unwrap();
-        consumers.push(tx);
-        
-        Consumer { rx: rx, sync: false }
+        consumers.push((self.n, tx));
+
+        Consumer {
+            rx: rx,
+            sync: false,
+            n: self.n,
+            consumers: self.consumers.clone()
+        }
     }
 }
 
 pub struct Consumer {
     rx: Receiver<Arc<Mutex<gst::Sample>>>,
-    sync: bool
+    sync: bool,
+    n: usize,
+    consumers: Consumers
 }
 
 impl Iterator for Consumer {
     type Item = Arc<Mutex<gst::Sample>>;
-    
+
     fn next(&mut self) -> Option<Self::Item> {
         match self.rx.recv() {
             Err(e) => {
@@ -82,7 +92,10 @@ impl Iterator for Consumer {
 
 impl Drop for Consumer {
     fn drop(&mut self) {
-        println!("TODO");
+        let mut consumers = self.consumers.lock().unwrap();
+        consumers.retain(|&(ref n, ref _tx)|
+            *n != self.n
+        )
     }
 }
 
