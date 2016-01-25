@@ -103,9 +103,18 @@ impl Handler for HttpHandler {
                                 data[i] = *c;
                             }
                         }).unwrap();
-                        res.write(&data).unwrap();
+                        match res.write(&data) {
+                            Ok(size) if size == data.len() =>
+                                (),
+                            Ok(size) =>
+                                println!("Wrote only {} of {} bytes", size, data.len()),
+                            Err(e) => {
+                                println!("Error writing {} bytes: {}", data.len(), e);
+                                break;
+                            }
+                        }
                     }
-                }
+                },
                 None =>
                     println!("Got no consumer for {:?}", path_components)
             }
