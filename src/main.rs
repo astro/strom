@@ -35,6 +35,7 @@ impl HttpHandler {
     }
 }
 
+// TODO: move Read & Write to Sink/Source
 impl Handler for HttpHandler {
     fn handle<'a, 'k>(&'a self, req: Request<'a, 'k>, mut res: Response<'a, Fresh>) {
         println!("req: {:?} {:?}", req.method, req.uri);
@@ -88,14 +89,20 @@ impl Handler for HttpHandler {
                     .and_then(|stream| {
                         println!("Found a valid stream to this req!");
                         let mut stream = stream.lock().unwrap();
-                        stream.get_broadcast_consumer(&path_components[1])
+                        match stream.get_mux_consumer(&path_components[1]) {
+                            Ok(stream) => Some(stream),
+                            Err(e) => {
+                                println!("Cannot get mux consumer: {}", e);
+                                None
+                            }
+                        }
                     })
             };
             match consume {
                 Some(consume) => {
                     println!("Got consumer for {:?}", path_components);
                     for sample in consume {
-                        let buffer = sample.lock().unwrap().buffer().unwrap();
+                        let buffer = sample.buffer().unwrap();
                         let mut data = Vec::with_capacity(buffer.size() as usize);
                         unsafe { data.set_len(buffer.size() as usize); }
                         buffer.map_read(|mapping| {

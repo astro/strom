@@ -60,4 +60,15 @@ impl Pipe {
     pub fn appsink(&self, name: &str) -> Option<Sink> {
         self.pipeline.get_by_name(name).and_then(|el| Some(Sink::new(el)) )
     }
+
+    pub fn add<E: gst::ElementT>(&mut self, element: E) -> Result<(), &'static str> {
+        match self.pipeline.add(element) {
+            true => Ok(()),
+            false => Err("Cannot add element to pipeline")
+        }
+    }
+
+    pub fn get(&self, name: &str) -> Option<gst::Element> {
+        self.pipeline.get_by_name(name)
+    }
 }
