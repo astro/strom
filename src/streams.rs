@@ -1,15 +1,15 @@
-use pipe::Pipe;
-use source::Source;
 use gst;
 use gst::{ElementT, BinT};
+use std::io::Write;
 
 use sink::Sink;
+use pipe::Pipe;
+use source::Source;
 
 #[allow(dead_code)]
 pub struct Stream {
     // Never retrieved, but referenced to stay alive:
-    pipe: Pipe,
-    src: Source
+    pipe: Pipe
 }
 
 impl Stream {
@@ -28,17 +28,12 @@ t. ! queue ! audioconvert ! opusenc bitrate=64000 ! tee name=opus allow-not-link
         ).expect("New pipeline failed");
 
         Stream {
-            src: pipe.appsrc("input").expect("by appsrc"),
             pipe: pipe
         }
     }
 
-    pub fn push_buffer(&mut self, buffer: &[u8]) {
-        self.src.push_buffer(buffer);
-    }
-
-    pub fn push_end(&mut self) {
-        self.src.end();
+    pub fn get_source(&self) -> Source {
+        self.pipe.appsrc("input").expect("input appsrc")
     }
 
     pub fn get_mux_consumer(&mut self, tee_name: &str) -> Result<Consumer, String> {
@@ -104,6 +99,13 @@ pub struct Consumer {
     parent: Pipe
 }
 
+impl Drop for Consumer {
+    fn drop(&mut self) {
+        self.parent.remove(&self.bin)
+            .unwrap_or_else(|e| println!("{}", e) )
+    }
+}
+
 /// Facade over Sink
 impl Iterator for Consumer {
     type Item = gst::Sample;
@@ -113,9 +115,35 @@ impl Iterator for Consumer {
     }
 }
 
-impl Drop for Consumer {
-    fn drop(&mut self) {
-        self.parent.remove(&self.bin)
-            .unwrap_or_else(|e| println!("{}", e) )
+impl Consumer {
+    pub fn write_to<W: Write>(&mut self, w: &mut W) {
+        for sample in self {
+            let buffer = sample.buffer().unwrap();
+            let mut data = Vec::with_capacity(buffer.size() as usize);
+            unsafe { data.set_len(buffer.size() as usize); }
+            match buffer.map_read(|mapping| {
+                for (i, c) in mapping.iter::<u8>().enumerate() {
+                    data[i] = *c;
+                }
+            }) {
+                Ok(()) => (),
+                Err(e) => {
+                    println!("{:?}", e);
+                    break;
+                }
+            }
+            match w.write(&data) {
+                Ok(size) if size == data.len() =>
+                    (),
+                Ok(size) => {
+                    println!("Wrote only {} of {} bytes", size, data.len());
+                    break;
+                },
+                Err(e) => {
+                    println!("Error writing {} bytes: {}", data.len(), e);
+                    break;
+                }
+            }
+        }
     }
 }

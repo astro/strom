@@ -19,7 +19,6 @@ mod sink;
 mod broadcast;
 mod streams;
 
-use chunk_reader::ChunkReader;
 use streams::Stream;
 
 
@@ -61,20 +60,17 @@ impl Handler for HttpHandler {
                 println!("New stream: {}", path_components[0]);
             }
 
-            for chunk in ChunkReader::new(req, 8192) {
+            let mut source = {
                 let mut stream = stream.lock().unwrap();
-                stream.push_buffer(&chunk);
-            }
-
+                stream.get_source()
+            };
+            source.read_from(req);
             println!("Done!");
+
             {
                 let mut streams = self.streams.lock().unwrap();
                 streams.remove(&path_components[0]);
                 println!("Removed stream: {}", path_components[0]);
-            }
-            {
-                let mut stream = stream.lock().unwrap();
-                stream.push_end();
             }
             res.end().unwrap();
         } else if req.method == Method::Get {
@@ -99,36 +95,19 @@ impl Handler for HttpHandler {
                     })
             };
             match consume {
-                Some(consume) => {
+                Some(mut consume) => {
                     println!("Got consumer for {:?}", path_components);
-                    for sample in consume {
-                        let buffer = sample.buffer().unwrap();
-                        let mut data = Vec::with_capacity(buffer.size() as usize);
-                        unsafe { data.set_len(buffer.size() as usize); }
-                        buffer.map_read(|mapping| {
-                            for (i, c) in mapping.iter::<u8>().enumerate() {
-                                data[i] = *c;
-                            }
-                        }).unwrap();
-                        match res.write(&data) {
-                            Ok(size) if size == data.len() =>
-                                (),
-                            Ok(size) =>
-                                println!("Wrote only {} of {} bytes", size, data.len()),
-                            Err(e) => {
-                                println!("Error writing {} bytes: {}", data.len(), e);
-                                break;
-                            }
-                        }
-                    }
+                    consume.write_to(&mut res);
                 },
                 None =>
                     println!("Got no consumer for {:?}", path_components)
             }
-            res.end().unwrap();
+            println!("Ending");
+            res.end().unwrap_or(());
+            println!("Ended");
         } else {
             *res.status_mut() = StatusCode::BadRequest;
-            res.start().unwrap().end().unwrap();
+            res.start().unwrap().end().unwrap_or(());
         }
     }
 }

@@ -1,5 +1,8 @@
 use gst;
 use std::sync::Arc;
+use std::io::Read;
+
+use chunk_reader::ChunkReader;
 
 pub struct Source {
     src: gst::appsrc::AppSrc,
@@ -33,22 +36,34 @@ impl Source {
         }
     }
 
-    pub fn push_buffer(&mut self, data: &[u8]) {
+    pub fn write(&mut self, data: &[u8]) -> bool {
         let pool = self.need_pool(data.len());
 
         let mut buffer = pool.acquire_buffer().expect("acquire buffer");
-        buffer.map_write(|mut mapping| {
+        match buffer.map_write(|mut mapping| {
             for (i, c) in mapping.iter_mut::<u8>().enumerate() {
                 *c = data[i];
             }
-        }).unwrap();
+        }) {
+            Ok(()) => (),
+            Err(e) => return false
+        }
         buffer.set_live(true);
         let res = self.src.push_buffer(buffer);
-        assert!(res == 0);
+        res == 0
     }
 
     pub fn end(&mut self) {
         let res = self.src.end_of_stream();
         println!("EOF return: {}", res);
+    }
+
+    pub fn read_from<R: Read>(&mut self, r: R) {
+        for chunk in ChunkReader::new(r, 8192) {
+            if !self.write(&chunk) {
+                break;
+            }
+        }
+        self.end();
     }
 }
