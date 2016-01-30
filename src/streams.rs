@@ -50,49 +50,58 @@ t. ! queue ! audioconvert ! opusenc bitrate=64000 ! tee name=opus allow-not-link
             "opus" => Ok(("oggmux", vec![])),
             _ => Err("No such stream")
         });
-        // TODO: fnord* must be unique!
-        let mut queue = try!(gst::Element::factory_make("queue", "fnord0")
+
+        let mut bin = try!(gst::Bin::new("")
+            .ok_or("Cannot create bin"));
+
+        let mut queue = try!(gst::Element::new("queue", "")
             .ok_or("Cannot create queue"));
-        try!(self.pipe.add(queue.to_element()));
-        let mut muxer = try!(gst::Element::factory_make(muxer_element, "fnord1")
+        if !bin.add(queue.to_element()) {
+            return Err("Cannot add queue to bin".to_owned());
+        }
+        let mut muxer = try!(gst::Element::new(muxer_element, "")
             .ok_or("Cannot create muxer"));
         for (k, v) in muxer_config {
             muxer.set(k, v);
         }
-        try!(self.pipe.add(muxer.to_element()));
-        let mut appsink = try!(gst::Element::factory_make("appsink", "fnord2")
+        if !bin.add(muxer.to_element()) {
+            return Err("Cannot add muxer to bin".to_owned());
+        }
+        let mut appsink = try!(gst::Element::new("appsink", "")
             .ok_or("Cannot create appsink"));
-        try!(self.pipe.add(appsink.to_element()));
+        if !bin.add(appsink.to_element()) {
+            return Err("Cannot add appsink to bin".to_owned());
+        }
+
+        self.pipe.add(bin.to_element());
 
         // Link
         let mut tee = try!(self.pipe.get(tee_name)
             .ok_or("Cannot get tee"));
         if !tee.link(&mut queue) {
-            panic!("Cannot link tee to queue");
-            return Err(format!("Cannot link tee to queue"));
+            return Err("Cannot link tee to queue".to_owned());
         }
-        queue.set_state(gst::GST_STATE_PLAYING);
         if !queue.link(&mut muxer) {
-            panic!("Cannot link tee to {}", muxer_element);
             return Err(format!("Cannot link tee to {}", muxer_element));
         }
-        muxer.set_state(gst::GST_STATE_PLAYING);
         if !muxer.link(&mut appsink) {
-            panic!("Cannot link {} to appsink", muxer_element);
             return Err(format!("Cannot link {} to appsink", muxer_element));
         }
-        appsink.set_state(gst::GST_STATE_PLAYING);
+
+        bin.set_state(gst::GST_STATE_PLAYING);
 
         Ok(Consumer {
-            muxer: muxer,
-            sink: Sink::new(appsink)
+            sink: Sink::new(appsink),
+            bin: bin,
+            parent: self.pipe.clone()
         })
     }
 }
 
 pub struct Consumer {
-    muxer: gst::Element,
-    sink: Sink
+    sink: Sink,
+    bin: gst::Bin,
+    parent: Pipe
 }
 
 /// Facade over Sink
@@ -101,5 +110,12 @@ impl Iterator for Consumer {
 
     fn next(&mut self) -> Option<Self::Item> {
         self.sink.next()
+    }
+}
+
+impl Drop for Consumer {
+    fn drop(&mut self) {
+        self.parent.remove(&self.bin)
+            .unwrap_or_else(|e| println!("{}", e) )
     }
 }

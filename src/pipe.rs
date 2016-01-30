@@ -1,5 +1,5 @@
 use gst;
-use gst::{BinT, ElementT};
+use gst::{BinT, ElementT, PipelineT};
 use std::thread;
 
 use source::Source;
@@ -8,6 +8,14 @@ use sink::Sink;
 
 pub struct Pipe {
     pipeline: gst::Pipeline
+}
+
+impl Clone for Pipe {
+    fn clone(&self) -> Self {
+        Pipe {
+            pipeline: self.pipeline.to_pipeline()
+        }
+    }
 }
 
 impl Pipe {
@@ -65,6 +73,13 @@ impl Pipe {
         match self.pipeline.add(element) {
             true => Ok(()),
             false => Err("Cannot add element to pipeline")
+        }
+    }
+
+    pub fn remove<E: gst::ElementT>(&mut self, element: &E) -> Result<(), &'static str> {
+        match self.pipeline.remove(element) {
+            true => Ok(()),
+            false => Err("Cannot remove element from pipeline")
         }
     }
 
