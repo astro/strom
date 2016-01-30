@@ -88,6 +88,8 @@ t. ! queue ! audioconvert ! opusenc bitrate=64000 ! tee name=opus allow-not-link
         Ok(Consumer {
             sink: Sink::new(appsink),
             bin: bin,
+            tee: tee,
+            queue: queue,
             parent: self.pipe.clone()
         })
     }
@@ -96,11 +98,15 @@ t. ! queue ! audioconvert ! opusenc bitrate=64000 ! tee name=opus allow-not-link
 pub struct Consumer {
     sink: Sink,
     bin: gst::Bin,
+    tee: gst::Element,
+    queue: gst::Element,
     parent: Pipe
 }
 
 impl Drop for Consumer {
     fn drop(&mut self) {
+        self.tee.unlink(&mut self.queue);
+        self.bin.pause();
         self.parent.remove(&self.bin)
             .unwrap_or_else(|e| println!("{}", e) )
     }
